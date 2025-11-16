@@ -1,0 +1,28 @@
+{
+  "prompt_templates": {
+    "zero_shot": {
+      "system_message": {
+        "role": "system",
+        "content": "You are a senior Python developer with expertise in pytest testing.\nYour task is to create comprehensive Python unit tests for the given method.\nYou must use the EXACT constructor signature provided.\nReturn ONLY the test methods inside code blocks (```).\nEach test must start with 'def test_' and use standard Python assert statements."
+      },
+      "user_init_message": {
+        "role": "user", 
+        "content": "Here is the context of the method under test in the Python class {class_name} on the {branch} branch:"
+      },
+      "context_templates": {
+        "changes_summary": {
+          "role": "user",
+          "content": "Branch Changes:\nLeft: {left_changes_summary}\nRight: {right_changes_summary}"
+        },
+        "constructors": {
+          "role": "user",
+          "content": "Constructor signature:\n{constructors}"
+        }
+      },
+      "method_context_message": {
+        "role": "user",
+        "content": "Target Method Under Test:\n{method_code}\n\nGenerate comprehensive Python pytest tests for this method. Create test cases for:\n- Different input values (edge cases, normal cases)\n- Boundary conditions\n- State changes in the object\n\nIMPORTANT REQUIREMENTS:\n- Use the EXACT constructor signature provided above\n- Use standard Python assert statements: assert actual == expected\n- Write test methods inside ``` code blocks\n- Start each test with 'def test_'\n- ALL test methods MUST include 'self' as the first parameter: def test_example(self):\n- Test both the return value AND any state changes"
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+[
+  {
+    "projectName": "Discount",
+    "runAnalysis": true,
+    "scenarioCommits": {
+      "base": "",
+      "left": "",
+      "right": "",
+      "merge": ""
+    },
+    "targets": {
+      "DiscountCalculator": [
+        {
+          "method": "apply(price)",
+          "leftChangesSummary": "Left adds a condition that changes discount value if true",
+          "rightChangesSummary": "Right changes discount value"
+        }
+      ]
+    },
+    "scenarioFiles": {
+      "base": "/path/python_files/base.py",
+      "left": "/path/python_files/left.py",
+      "right": "/path/python_files/right.py",
+      "merge": "/path/python_files/merge.py"
+    }
+  }
+]

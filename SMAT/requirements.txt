@@ -1,0 +1,4 @@
+types-requests
+google-genai
+pytest
+coverage

@@ -1,0 +1,22 @@
+{
+  "python_executable": "python3",
+  "repo_dir": "",
+  "projects_folder": "",
+  "input_path": "/path/input-smat.json",
+  "tests_dst": "",
+  "path_output_csv": "",
+  "logger_level": "DEBUG",
+  "test_suite_generators": [
+    "llm"
+  ],
+  "test_suite_generation_search_time_available": "45",
+  "prompt_template": "zero_shot",
+  "api_params": {
+    "gemini": {
+      "model": "gemini-2.5-flash",
+      "api_key": "your-api_key-here",
+      "temperature": 0,
+      "timeout_seconds": 300
+    }
+  }
+}

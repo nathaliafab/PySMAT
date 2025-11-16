@@ -1,0 +1,18 @@
+from typing import List, Dict, Union
+
+
+class MergeScenarioUnderAnalysis:
+    def __init__(self, project_name: str, run_analysis: bool, scenario_commits: "ScenarioInformation", targets: "Dict[str, Union[List[Dict[str, str]], List[str]]]", scenario_files: "ScenarioInformation"):
+        self.project_name = project_name
+        self.run_analysis = run_analysis
+        self.scenario_commits = scenario_commits
+        self.targets = targets
+        self.scenario_files = scenario_files
+
+
+class ScenarioInformation:
+    def __init__(self, base: str, left: str, right: str, merge: str):
+        self.base = base
+        self.left = left
+        self.right = right
+        self.merge = merge
