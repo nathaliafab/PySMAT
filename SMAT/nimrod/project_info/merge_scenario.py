@@ -1,6 +1,4 @@
 from nimrod.project_info.commit import Commit
-import csv
-
 
 class MergeScenario:
 

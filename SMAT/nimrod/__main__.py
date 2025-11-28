@@ -18,7 +18,7 @@ from nimrod.test_suites_execution.python_test_suite_executor import PythonTestSu
 # All Java-specific imports removed
 from nimrod.tools.python import Python
 from nimrod.tools.python_coverage import PythonCoverage
-from nimrod.input_parsing.input_parser import CsvInputParser, JsonInputParser
+from nimrod.input_parsing.input_parser import JsonInputParser
 
 
 def get_llm_test_suite_generators(config: Dict[str, str]) -> List[PythonTestSuiteGenerator]:
@@ -68,21 +68,14 @@ def get_output_generators(config: Dict[str, str]) -> List[OutputGenerator]:
 
   return generators
 
-
 def parse_scenarios_from_input(config: Dict[str, str]) -> List[MergeScenarioUnderAnalysis]:
     json_input = config.get('input_path', "")
-    csv_input_path = config.get('path_hash_csv', "")
 
     if json_input != "":
         return JsonInputParser().parse_input(json_input)
-    elif csv_input_path != "":
-        logging.warning(
-            'DEPRECATED: Providing input data with `path_hash_csv` is deprecated and will be removed in future versions of SMAT. Use `input_path` instead.')
-        return CsvInputParser().parse_input(csv_input_path)
     else:
         logging.fatal('No input file provided')
         exit(1)
-
 
 def main():
   setup_logging()
