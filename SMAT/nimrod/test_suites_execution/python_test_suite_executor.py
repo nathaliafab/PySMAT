@@ -3,10 +3,8 @@ import re
 import subprocess
 import json
 import os
-import tempfile
 import shutil
-from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 from nimrod.test_suite_generation.test_suite import TestSuite
 from nimrod.test_suites_execution.test_case_result import TestCaseResult
 from nimrod.tests.utils import get_base_output_path
@@ -54,7 +52,7 @@ class PythonTestSuiteExecutor:
         self._python = python
         self._coverage = coverage
 
-    def execute_test_suite(self, test_suite: TestSuite, target_file: str, number_of_executions: int = 3, branch: str = None) -> Dict[str, TestCaseResult]:
+    def execute_test_suite(self, test_suite: TestSuite, target_file: str, number_of_executions: int = 3, branch: str = "") -> Dict[str, TestCaseResult]:
         """
         Execute Python test suite and return results.
         
@@ -173,7 +171,7 @@ class PythonTestSuiteExecutor:
         except Exception as e:
             logging.error(f"Error restoring class file for {class_name}: {e}")
 
-    def _execute_pytest(self, test_suite: TestSuite, target_file: str, test_class: str, branch: str = None, extra_params: List[str] = []) -> Dict[str, TestCaseResult]:
+    def _execute_pytest(self, test_suite: TestSuite, target_file: str, test_class: str, branch: str = "", extra_params: List[str] = []) -> Dict[str, TestCaseResult]:
         """
         Execute Python tests using pytest and parse results.
         If branch is specified, switches to that branch version before execution.
@@ -181,7 +179,7 @@ class PythonTestSuiteExecutor:
         try:
             # Switch to specific branch if requested
             if branch:
-                class_name = self._extract_class_name_from_target_file(target_file)
+                class_name = self._extract_class_name_from_target_file(target_file, test_suite.path)
                 if not self._switch_class_file_for_branch(test_suite.path, class_name, branch):
                     return {f"test_{test_class}": TestCaseResult.NOT_EXECUTABLE}
             
@@ -222,11 +220,37 @@ class PythonTestSuiteExecutor:
                 
             return {f"test_{test_class}": TestCaseResult.NOT_EXECUTABLE}
 
-    def _extract_class_name_from_target_file(self, target_file: str) -> str:
+    def _extract_class_name_from_target_file(self, target_file: str, test_suite_path: str = "") -> str:
         """Extract class name from target file path."""
-        # Target file is the branch file path, we need to extract class name
-        # For now, hardcode to DiscountCalculator since that's the class we're testing
-        return "DiscountCalculator"
+        # Extract class name from the target file name
+        target_basename = os.path.basename(target_file)
+        # Remove file extension first
+        target_name = os.path.splitext(target_basename)[0]
+        
+        if '_' in target_name:
+            # Extract class name (e.g., DiscountCalculator from DiscountCalculator_merge)
+            class_name = target_name.split('_')[0]
+        else:
+            # If no underscore, check if it's a variant file (base.py, left.py, right.py, merge.py)
+            if target_name in ['base', 'left', 'right', 'merge'] and test_suite_path:
+                # Find test files to extract class name
+                import glob
+                test_pattern = os.path.join(test_suite_path, "*Test_*.py")
+                test_files = glob.glob(test_pattern)
+                if test_files:
+                    # Extract class name from first test file (e.g., DiscountCalculatorTest_*.py -> DiscountCalculator)
+                    first_test = os.path.basename(test_files[0])
+                    if 'Test_' in first_test:
+                        class_name = first_test.split('Test_')[0]
+                    else:
+                        class_name = target_name
+                else:
+                    class_name = "DiscountCalculator"  # Fallback
+            else:
+                class_name = target_name
+        
+        logging.debug(f"Executor: target_file={target_file}, extracted class_name={class_name}")
+        return class_name
 
     def _parse_pytest_results_from_output(self, output: str, test_class: str) -> Dict[str, TestCaseResult]:
         """
@@ -283,7 +307,7 @@ class PythonTestSuiteExecutor:
 
     def execute_test_suite_with_coverage(self, test_suite: TestSuite, target_file: str, test_cases: List[str]) -> str:
         """
-        Execute Python test suite with coverage measurement.
+        Execute Python test suite with coverage measurement using pytest-cov.
         
         Args:
             test_suite: TestSuite object
@@ -291,29 +315,39 @@ class PythonTestSuiteExecutor:
             test_cases: List of test cases to execute
             
         Returns:
-            Path to coverage report
+            Path to coverage report directory
         """
         logging.debug('Starting execution of test suite for coverage collection')
         
-        # Create coverage test code
-        test_code = self._create_coverage_test_code(test_suite, target_file, test_cases)
-        
         try:
-            # Run with coverage
-            coverage_result = self._coverage.run_with_coverage(
+            unified_report = self._coverage.run_coverage_for_conflicted_tests(
+                test_suite.path,
                 target_file, 
-                test_code, 
-                [target_file]
+                test_cases
             )
             
-            # Save coverage report
+            # Save coverage report in the test suite directory
             report_dir = os.path.join(test_suite.path, 'coverage_report')
             os.makedirs(report_dir, exist_ok=True)
             
-            # Save coverage data as JSON
+            # Save unified coverage report as JSON
             coverage_file = os.path.join(report_dir, 'coverage.json')
             with open(coverage_file, 'w') as f:
-                json.dump(coverage_result.get('coverage', {}), f, indent=2)
+                json.dump(unified_report, f, indent=2)
+            
+            # Log coverage summary
+            if unified_report and 'conflicted_tests_coverage' in unified_report:
+                logging.info("Conflicted tests coverage summary:")
+                for test_entry in unified_report['conflicted_tests_coverage']:
+                    test_name = test_entry['test_case_name']
+                    coverage_data = test_entry.get('coverage_data')
+                    if coverage_data:
+                        overall_percent = coverage_data.get('overall_coverage_percent', 0)
+                        line_coverage = coverage_data.get('line_coverage', {})
+                        branch_coverage = coverage_data.get('branch_coverage', {})
+                        logging.info(f"  {test_name}: {overall_percent:.1f}% overall (lines: {line_coverage.get('percent', 0):.1f}%, branches: {branch_coverage.get('percent', 0):.1f}%)")
+                    else:
+                        logging.info(f"  {test_name}: No coverage data available")
             
             logging.debug('Finished execution of test suite for coverage collection')
             return report_dir
@@ -321,77 +355,3 @@ class PythonTestSuiteExecutor:
         except Exception as e:
             logging.error(f"Coverage execution failed: {e}")
             return ""
-
-    def _create_coverage_test_code(self, test_suite: TestSuite, target_file: str, test_cases: List[str]) -> str:
-        """
-        Create Python code that executes the specified test cases.
-        """
-        # Import the target module
-        target_module_name = Path(target_file).stem
-        
-        test_code = f"""
-import sys
-import os
-import unittest
-
-# Add the target file directory to Python path
-target_dir = os.path.dirname('{target_file}')
-if target_dir not in sys.path:
-    sys.path.insert(0, target_dir)
-
-# Import the target module
-from {target_module_name} import *
-
-# Load and run specific test cases
-if __name__ == '__main__':
-    loader = unittest.TestLoader()
-    suite = unittest.TestSuite()
-    
-    # Add each test case to the suite
-"""
-        
-        for test_case in test_cases:
-            test_code += f"    # Test case: {test_case}\n"
-            # Add logic to load and run specific test case
-        
-        test_code += """
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
-"""
-        
-        return test_code
-
-    def execute_specific_tests(self, test_suite: TestSuite, target_file: str, test_targets: List[str]) -> Dict[str, TestCaseResult]:
-        """
-        Execute specific test methods from a test suite.
-        """
-        results = {}
-        
-        for test_target in test_targets:
-            try:
-                # Parse test target (format: TestClass#test_method)
-                if '#' in test_target:
-                    test_class, test_method = test_target.split('#', 1)
-                else:
-                    test_class = test_target
-                    test_method = None
-                
-                # Execute the specific test
-                test_result = self._execute_pytest(test_suite, target_file, test_class)
-                
-                if test_method:
-                    # Filter results for specific method
-                    if test_method in test_result:
-                        results[test_target] = test_result[test_method]
-                    else:
-                        results[test_target] = TestCaseResult.NOT_EXECUTABLE
-                else:
-                    # Include all methods from the class
-                    for method, result in test_result.items():
-                        results[f"{test_class}#{method}"] = result
-                        
-            except Exception as e:
-                logging.error(f"Error executing test {test_target}: {e}")
-                results[test_target] = TestCaseResult.NOT_EXECUTABLE
-        
-        return results
