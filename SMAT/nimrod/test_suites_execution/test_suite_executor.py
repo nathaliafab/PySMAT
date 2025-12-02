@@ -3,7 +3,7 @@ import re
 import subprocess
 import json
 from os import path, makedirs
-from typing import Dict, List, Optional
+from typing import Dict, List
 from nimrod.test_suite_generation.test_suite import TestSuite
 from nimrod.test_suites_execution.test_case_result import TestCaseResult
 from nimrod.tests.utils import get_base_output_path
@@ -15,7 +15,7 @@ EXECUTION_LOG_FILE = path.join(reports_dir, "execution_results.json")
 def is_failed_caused_by_import_problem(test_case_name: str, failed_test_message: str) -> bool:
     """Check if test failed due to import/module issues"""
     my_regex = re.escape(test_case_name) + r"[0-9A-Za-z0-9_\(\.\)\n \:]+(ImportError|ModuleNotFoundError|AttributeError|NameError)"
-    return re.search(my_regex, failed_test_message) != None
+    return re.search(my_regex, failed_test_message) is not None
 
 def is_failed_caused_by_syntax_error(test_case_name: str, failed_test_message: str) -> bool:
     """Check if test failed due to syntax errors"""
@@ -187,6 +187,7 @@ class TestSuiteExecutor:
                 '--cov=' + path.dirname(target_file),  # Coverage source directory
                 '--cov-report=html:' + report_dir,     # HTML report output
                 '--cov-report=term',                   # Terminal output
+                '--cov-branch',                        # Include branch coverage
                 '-v'
             ] + test_files
             
@@ -210,42 +211,3 @@ class TestSuiteExecutor:
         
         logging.debug('Finished execution of Python test suite for coverage collection')
         return report_dir
-
-    def _execute_specific_tests(self, test_suite: TestSuite, target_file: str, test_targets: List[str], extra_params: List[str] = []) -> None:
-        """Execute specific pytest test methods"""
-        try:
-            # Convert test targets to pytest format (file::test_method)
-            pytest_targets = []
-            for target in test_targets:
-                if '::' not in target:
-                    # Assume it's a test method name, find the appropriate file
-                    for test_class in test_suite.test_classes_names:
-                        test_file = path.join(test_suite.path, f"{test_class}.py")
-                        if path.exists(test_file):
-                            pytest_targets.append(f"{test_file}::{target}")
-                            break
-                else:
-                    pytest_targets.append(target)
-            
-            if not pytest_targets:
-                logging.warning("No valid test targets found")
-                return None
-                
-            params = ['pytest'] + pytest_targets + ['-v'] + extra_params
-            
-            result = subprocess.run(
-                params,
-                cwd=test_suite.path,
-                capture_output=True,
-                text=True,
-                timeout=300
-            )
-            
-            return result
-            
-        except subprocess.CalledProcessError as error:
-            logging.error("Error executing specific tests: %s", error)
-            return None
-        except Exception as e:
-            logging.error("Unexpected error in specific test execution: %s", str(e))
-            return None

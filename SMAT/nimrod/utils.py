@@ -26,14 +26,6 @@ def generate_python_path(paths):
     return os.pathsep.join([p for p in paths if p is not None and len(p) > 0])
 
 
-def package_to_dir(package):
-    return package.replace('.', os.sep)
-
-
-def dir_to_package(directory):
-    return directory.replace(os.sep, '.')
-
-
 def load_json(file_path):
     """Loads a JSON file and return its content as a dictionary"""
     with open(file_path, "r") as file:
