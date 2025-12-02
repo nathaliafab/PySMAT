@@ -34,11 +34,10 @@ python3 run_experiment.py
 
 ## Estrutura do Projeto
 
-O SMAT-Python trabalha com 4 versões de arquivos Python:
+O PySMAT trabalha com 4 versões de arquivos Python:
 - `python_files/base.py` - Versão base do código
 - `python_files/left.py` - Versão do branch esquerdo
 - `python_files/right.py` - Versão do branch direito  
 - `python_files/merge.py` - Versão merged
 
 A ferramenta gera testes automaticamente usando IA (Gemini) e executa esses testes nas 4 versões para detectar conflitos semânticos.
-
