@@ -3,23 +3,15 @@ import logging
 from os import makedirs, path
 from time import time
 from typing import List
-from subprocess import CalledProcessError
-import json
 
-from nimrod.tests.utils import get_config
 from nimrod.core.merge_scenario_under_analysis import MergeScenarioUnderAnalysis
 from nimrod.tests.utils import get_base_output_path
 from nimrod.test_suite_generation.test_suite import TestSuite
 
-from nimrod.utils import generate_python_path
+from nimrod.utils import generate_python_path, save_json, load_json
 
 
 class TestSuiteGenerator(ABC):
-    SEARCH_TIME_AVAILABLE = int(get_config().get(
-        'test_suite_generation_search_time_available', 300))
-    DETERMINISTIC_TESTS_QUANTITY = int(get_config().get(
-        'test_suite_generation_deterministic_tests_quantity', 100_000_000))
-    SEED = int(get_config().get('test_suite_generation_seed', 42))
 
     def __init__(self, python_tool=None) -> None:
         self._python = python_tool
@@ -72,11 +64,10 @@ class TestSuiteGenerator(ABC):
         makedirs(reports_dir, exist_ok=True)
 
         if path.exists(COMPILATION_LOG_FILE):
-            with open(COMPILATION_LOG_FILE, "r", encoding="utf-8") as f:
-                try:
-                    compilation_results = json.load(f)
-                except json.JSONDecodeError:
-                    compilation_results = {}
+            try:
+                compilation_results = load_json(COMPILATION_LOG_FILE)
+            except FileNotFoundError:
+                compilation_results = {}
         else:
             compilation_results = {}
 
@@ -84,8 +75,7 @@ class TestSuiteGenerator(ABC):
         safe_output = output.strip() if output.strip() else ""
         test_suite_entry["validation_output"][python_file] = safe_output
 
-        with open(COMPILATION_LOG_FILE, "w", encoding="utf-8") as f:
-            json.dump(compilation_results, f, indent=4)
+        save_json(COMPILATION_LOG_FILE, compilation_results)
 
     def _validate_test_suite(self, input_file: str, test_suite_path: str, extra_python_path: List[str] = []) -> str:
         """Validate Python test files for syntax errors"""

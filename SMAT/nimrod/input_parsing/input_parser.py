@@ -1,5 +1,4 @@
-import csv
-import json
+from nimrod.utils import load_json
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
@@ -16,8 +15,7 @@ class InputParser(ABC):
 class JsonInputParser(InputParser):
     def parse_input(self, file_path: str) -> "List[MergeScenarioUnderAnalysis]":
         json_data: List[Dict[str, Any]] = []
-        with open(file_path, 'r') as json_file:
-            json_data = json.load(json_file)
+        json_data = load_json(file_path)
 
         return [self._convert_to_internal_representation(scenario) for scenario in json_data]
 
@@ -43,39 +41,3 @@ class JsonInputParser(InputParser):
                 merge=scenario_files_json.get('merge'),
             ),
         )
-
-
-class CsvInputParser(InputParser):
-    def parse_input(self, file_path: str) -> "List[MergeScenarioUnderAnalysis]":
-        with open(file_path, 'r') as csv_file:
-            csv_data = csv.reader(csv_file, delimiter=',')
-            return [self._convert_to_internal_representation(scenario) for scenario in csv_data]
-
-    def _convert_to_internal_representation(self, row: "List[str]"):
-        return MergeScenarioUnderAnalysis(
-            project_name=row[0],
-            run_analysis=row[1] == "true",
-            scenario_commits=ScenarioInformation(
-                base=row[2],
-                left=row[3],
-                right=row[4],
-                merge=row[5],
-            ),
-            targets=self._build_targets_from_old_entry(row[6], row[7]),
-            scenario_files=ScenarioInformation(
-                base=row[10],
-                left=row[11],
-                right=row[12],
-                merge=row[13],
-            )
-        )
-
-    def _build_targets_from_old_entry(self, class_list: str, method_list: str):
-        classes = class_list.split(' | ')
-        targets: Dict[str, List[str]] = dict()
-        for class_name in classes:
-            targets[class_name] = []
-
-        targets[classes[0]] = [method_list.replace('|', ",")]
-
-        return targets

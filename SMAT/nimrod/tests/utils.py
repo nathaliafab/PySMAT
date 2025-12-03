@@ -1,25 +1,25 @@
 import logging
 import logging.handlers
 import os
-import json
-import shutil
+from json import JSONDecodeError
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
+from nimrod.utils import load_json
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 
 
 def get_config() -> Dict[str, Any]:
-    with open(os.path.join(PATH, "env-config.json"), 'r') as j:
-        return json.load(j)
+    config_path = os.path.join(PATH, "env-config.json")
+    return load_json(config_path)
 
 
 def setup_logging():
     try:
         config = get_config()
         config_level = config.get('logger_level', 'INFO').upper()
-    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+    except (FileNotFoundError, JSONDecodeError, KeyError):
         config_level = 'INFO'
     
     level = getattr(logging, config_level, logging.INFO)

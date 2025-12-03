@@ -1,7 +1,6 @@
 import logging
 import re
 import subprocess
-import json
 import os
 import shutil
 from typing import Dict, List
@@ -10,6 +9,7 @@ from nimrod.test_suites_execution.test_case_result import TestCaseResult
 from nimrod.tests.utils import get_base_output_path
 from nimrod.tools.python import Python
 from nimrod.tools.python_coverage import PythonCoverage
+from nimrod.utils import save_json, load_json
 
 reports_dir = os.path.join(os.path.dirname(get_base_output_path()), "reports")
 os.makedirs(reports_dir, exist_ok=True)
@@ -68,9 +68,8 @@ class PythonTestSuiteExecutor:
 
         # Load existing log if it exists
         try:
-            with open(EXECUTION_LOG_FILE, "r") as log_file:
-                execution_log = json.load(log_file)
-        except (FileNotFoundError, json.JSONDecodeError):
+            execution_log = load_json(EXECUTION_LOG_FILE, default_value={})
+        except FileNotFoundError:
             execution_log = {}
 
         for test_class in test_suite.test_classes_names:
@@ -115,8 +114,7 @@ class PythonTestSuiteExecutor:
                 })
 
         # Save execution log
-        with open(EXECUTION_LOG_FILE, "w") as log_file:
-            json.dump(execution_log, log_file, indent=4)
+        save_json(EXECUTION_LOG_FILE, execution_log)
 
         return results
 
@@ -332,8 +330,7 @@ class PythonTestSuiteExecutor:
             
             # Save unified coverage report as JSON
             coverage_file = os.path.join(report_dir, 'coverage.json')
-            with open(coverage_file, 'w') as f:
-                json.dump(unified_report, f, indent=2)
+            save_json(coverage_file, unified_report)
             
             # Log coverage summary
             if unified_report and 'conflicted_tests_coverage' in unified_report:

@@ -1,12 +1,12 @@
 import logging
 import re
 import subprocess
-import json
 from os import path, makedirs
 from typing import Dict, List
 from nimrod.test_suite_generation.test_suite import TestSuite
 from nimrod.test_suites_execution.test_case_result import TestCaseResult
 from nimrod.tests.utils import get_base_output_path
+from nimrod.utils import save_json, load_json
 
 reports_dir = path.join(path.dirname(get_base_output_path()), "reports")
 makedirs(reports_dir, exist_ok=True)
@@ -37,9 +37,8 @@ class TestSuiteExecutor:
 
         # Load existing log if it exists
         try:
-            with open(EXECUTION_LOG_FILE, "r") as log_file:
-                execution_log = json.load(log_file)
-        except (FileNotFoundError, json.JSONDecodeError):
+            execution_log = load_json(EXECUTION_LOG_FILE, default_value={})
+        except FileNotFoundError:
             execution_log = {}
 
         for test_class in test_suite.test_classes_names:
@@ -80,8 +79,7 @@ class TestSuiteExecutor:
                     "result": {test_case: str(test_case_result) for test_case, test_case_result in response.items()}
                 })
 
-        with open(EXECUTION_LOG_FILE, "w") as log_file:
-            json.dump(execution_log, log_file, indent=4)
+        save_json(EXECUTION_LOG_FILE, execution_log)
 
         return results
 
