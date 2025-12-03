@@ -1,4 +1,3 @@
-import json
 from abc import ABC, abstractmethod
 import logging
 from os import makedirs, path
@@ -6,6 +5,7 @@ from typing import TypeVar, Generic
 
 from nimrod.output_generation.output_generator_context import OutputGeneratorContext
 from nimrod.tests.utils import get_base_output_path
+from nimrod.utils import save_json, load_json
 
 T = TypeVar("T")
 
@@ -44,11 +44,9 @@ class OutputGenerator(ABC, Generic[T]):
         if not path.exists(file_path):
             return []
         try:
-            with open(file_path, "r") as read_file:
-                return json.load(read_file)
-        except json.JSONDecodeError:
+            return load_json(file_path, default_value=[])
+        except FileNotFoundError:
             return []
 
     def _write_json(self, file_path: str, data) -> None:
-        with open(file_path, "w") as write_file:
-            json.dump(data, write_file, indent=4)
+        save_json(file_path, data)

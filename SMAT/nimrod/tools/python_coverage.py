@@ -1,9 +1,9 @@
 import os
 import subprocess
-import json
 import glob
 from datetime import datetime
 import logging
+from nimrod.utils import save_json, load_json
 
 
 class PythonCoverage:
@@ -270,8 +270,7 @@ class PythonCoverage:
         
         # Save unified report
         unified_file = os.path.join(output_dir, 'unified_conflicts_coverage.json')
-        with open(unified_file, 'w') as f:
-            json.dump(unified_report, f, indent=2)
+        save_json(unified_file, unified_report)
         return unified_report
 
     def _restore_original_file(self, main_file, backup_file):
@@ -285,8 +284,7 @@ class PythonCoverage:
         """Load coverage data from pytest-cov JSON report."""
         try:
             if os.path.exists(coverage_json_file):
-                with open(coverage_json_file, 'r', encoding='utf-8') as f:
-                    coverage_data = json.load(f)
+                coverage_data = load_json(coverage_json_file)
                 return coverage_data
             else:
                 logging.warning(f"Coverage JSON file not found: {coverage_json_file}")

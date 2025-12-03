@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-
-import json
 import os
 from typing import Dict, List, Any, Optional
+from nimrod.utils import save_json, load_json
 
 
 class PromptManager:    
@@ -15,9 +14,8 @@ class PromptManager:
         
     def _load_config(self) -> Dict[str, Any]:
         try:
-            with open(self.config_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
+            return load_json(self.config_path, default_value={"prompt_templates": {"zero_shot": {}}})
+        except (FileNotFoundError, OSError, ValueError):
             return {"prompt_templates": {"zero_shot": {}}}
     
     def _format_template(self, template: Dict[str, str], **kwargs) -> Dict[str, str]:
@@ -85,11 +83,10 @@ class PromptManager:
         
         try:
             if os.path.exists(output_file_path):
-                with open(output_file_path, "r", encoding='utf-8') as file:
-                    existing_data = json.load(file)
+                existing_data = load_json(output_file_path)
             else:
                 existing_data = {}
-        except:
+        except (FileNotFoundError, OSError, ValueError):
             existing_data = {}
         
         if class_name not in existing_data:
@@ -98,5 +95,4 @@ class PromptManager:
         existing_data[class_name][method_name] = messages_dict
         
         os.makedirs(output_path, exist_ok=True)
-        with open(output_file_path, "w", encoding='utf-8') as file:
-            json.dump(existing_data, file, indent=4, ensure_ascii=False)
+        save_json(output_file_path, existing_data, ensure_ascii=False)

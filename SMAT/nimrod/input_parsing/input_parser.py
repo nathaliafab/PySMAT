@@ -1,4 +1,4 @@
-import json
+from nimrod.utils import load_json
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
@@ -15,8 +15,7 @@ class InputParser(ABC):
 class JsonInputParser(InputParser):
     def parse_input(self, file_path: str) -> "List[MergeScenarioUnderAnalysis]":
         json_data: List[Dict[str, Any]] = []
-        with open(file_path, 'r') as json_file:
-            json_data = json.load(json_file)
+        json_data = load_json(file_path)
 
         return [self._convert_to_internal_representation(scenario) for scenario in json_data]
 

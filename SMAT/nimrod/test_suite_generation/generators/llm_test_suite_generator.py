@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import ast
@@ -461,8 +460,7 @@ class PythonTestSuiteGenerator(TestSuiteGenerator):
         os.makedirs(os.path.dirname(time_duration_path), exist_ok=True)
 
         if not os.path.exists(time_duration_path):
-            with open(time_duration_path, "w") as file:
-                json.dump({}, file)
+            save_json(time_duration_path, {})
 
         time_duration_dict = load_json(time_duration_path)
 
