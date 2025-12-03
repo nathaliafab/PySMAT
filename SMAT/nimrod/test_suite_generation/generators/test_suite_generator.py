@@ -3,10 +3,8 @@ import logging
 from os import makedirs, path
 from time import time
 from typing import List
-from subprocess import CalledProcessError
 import json
 
-from nimrod.tests.utils import get_config
 from nimrod.core.merge_scenario_under_analysis import MergeScenarioUnderAnalysis
 from nimrod.tests.utils import get_base_output_path
 from nimrod.test_suite_generation.test_suite import TestSuite
@@ -15,11 +13,6 @@ from nimrod.utils import generate_python_path
 
 
 class TestSuiteGenerator(ABC):
-    SEARCH_TIME_AVAILABLE = int(get_config().get(
-        'test_suite_generation_search_time_available', 300))
-    DETERMINISTIC_TESTS_QUANTITY = int(get_config().get(
-        'test_suite_generation_deterministic_tests_quantity', 100_000_000))
-    SEED = int(get_config().get('test_suite_generation_seed', 42))
 
     def __init__(self, python_tool=None) -> None:
         self._python = python_tool

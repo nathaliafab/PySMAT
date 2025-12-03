@@ -17,8 +17,13 @@ class PythonCoverage:
     def install_coverage(self):
         """Install pytest-cov if not available."""
         try:
-            import pytest_cov
+            subprocess.check_call([
+                self.python.python_executable, '-m', 'pip', 'install', 'pytest-cov'
+            ])
             return True
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Failed to install pytest-cov: {e}")
+            return False
         except ImportError:
             try:
                 subprocess.check_call([
@@ -45,7 +50,6 @@ class PythonCoverage:
             raise RuntimeError("Could not install pytest-cov")
         
         if not conflicted_test_names:
-            logging.warning("No conflicted tests provided")
             return {}
         
         # Extract class name from merge file or test files
@@ -141,16 +145,11 @@ class PythonCoverage:
         if os.path.exists(merge_file):
             import shutil
             shutil.copy2(merge_file, main_file)
-            logging.debug(f"Copied {merge_file} to {main_file}")
 
     def _map_conflicted_tests_to_files(self, conflicted_tests, test_suite_path, class_name):
         """Map conflicted test names to actual test files."""
         all_test_files = glob.glob(os.path.join(test_suite_path, f"{class_name}Test_*.py"))
         test_file_mapping = {}
-        
-        logging.info(f"Found {len(all_test_files)} test files in {test_suite_path}")
-        logging.info(f"Test files: {[os.path.basename(f) for f in all_test_files]}")
-        logging.info(f"Conflicted tests to map: {conflicted_tests}")
         
         for conflicted_test in conflicted_tests:
             test_class_part = conflicted_test.split('#')[0] if '#' in conflicted_test else conflicted_test
@@ -160,12 +159,9 @@ class PythonCoverage:
                 test_basename = os.path.basename(test_file)
                 if test_class_part in test_basename:
                     test_file_mapping[conflicted_test] = test_basename
-                    logging.info(f"Mapped '{conflicted_test}' -> '{test_basename}'")
                     break
             else:
                 logging.warning(f"Could not find test file for: {conflicted_test}")
-        
-        logging.info(f"Final mapping: {test_file_mapping}")
         return test_file_mapping
 
     def _run_individual_coverage(self, test_file_mapping, test_suite_path, class_name, output_dir):
@@ -276,8 +272,6 @@ class PythonCoverage:
         unified_file = os.path.join(output_dir, 'unified_conflicts_coverage.json')
         with open(unified_file, 'w') as f:
             json.dump(unified_report, f, indent=2)
-        
-        logging.info(f"Created unified conflicts+coverage report: {unified_file}")
         return unified_report
 
     def _restore_original_file(self, main_file, backup_file):
@@ -286,7 +280,6 @@ class PythonCoverage:
             import shutil
             shutil.copy2(backup_file, main_file)
             os.remove(backup_file)
-            logging.debug(f"Restored original file: {main_file}")
 
     def _load_coverage_json(self, coverage_json_file):
         """Load coverage data from pytest-cov JSON report."""

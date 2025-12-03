@@ -11,7 +11,7 @@ class TestSuiteGeneration:
         self._test_suite_generators = test_suite_generators
 
     def generate_test_suites(self, scenario: MergeScenarioUnderAnalysis, input_file: str, use_determinism: bool) -> List[TestSuite]:
-        logging.info("Starting Python test generation for project %s using file %s", scenario.project_name, input_file)
+        logging.info("Starting test generation for project %s using file %s", scenario.project_name, input_file)
         test_suites: List[TestSuite] = list()
 
         for generator in self._test_suite_generators:
@@ -19,8 +19,7 @@ class TestSuiteGeneration:
                 test_suites.append(generator.generate_and_compile_test_suite(
                     scenario, input_file, use_determinism))
             except Exception as error:
-                logging.error(f"It was not possible to generate test suite using {generator.get_generator_tool_name()}")
-                logging.debug(error)
+                logging.error(f"It was not possible to generate test suite using {generator.get_generator_tool_name()}: %s", error)
 
-        logging.info("Finished Python test generation for project %s using file %s", scenario.project_name, input_file)
+        logging.info("Finished test generation for project %s using file %s", scenario.project_name, input_file)
         return test_suites

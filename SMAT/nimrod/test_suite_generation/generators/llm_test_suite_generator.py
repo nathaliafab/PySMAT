@@ -5,7 +5,6 @@ import ast
 import re
 from typing import List, Dict, Union, Any, Optional
 from time import time
-from pathlib import Path
 
 from nimrod.core.merge_scenario_under_analysis import MergeScenarioUnderAnalysis
 from nimrod.test_suite_generation.generators.prompt_manager import PromptManager
@@ -352,7 +351,7 @@ class PythonTestSuiteGenerator(TestSuiteGenerator):
             # Copy the source file with the class name, but use branch-specific naming for identification
             dest_path = os.path.join(output_path, f"{class_name.split('.')[-1]}.py")
             shutil.copy2(source_code_path, dest_path)
-            logging.info(f"Copied {branch} branch file {source_code_path} to {dest_path}")
+            logging.debug(f"Copied {branch} branch file {source_code_path} to {dest_path}")
 
     def _copy_all_branch_files_to_test_dir(self, output_path: str, scenario, class_name: str) -> None:
         """Copy all 4 branch files to test directory with branch-specific names."""
@@ -364,7 +363,7 @@ class PythonTestSuiteGenerator(TestSuiteGenerator):
                 # Copy with branch-specific name: ClassName_branch.py
                 dest_path = os.path.join(output_path, f"{class_name.split('.')[-1]}_{branch}.py")
                 shutil.copy2(source_file, dest_path)
-                logging.info(f"Copied {branch} branch file {source_file} to {dest_path}")
+                logging.debug(f"Copied {branch} branch file {source_file} to {dest_path}")
             else:
                 logging.warning(f"Branch file not found for {branch}: {source_file}")
 
@@ -406,21 +405,19 @@ class PythonTestSuiteGenerator(TestSuiteGenerator):
                         elif node.name in ['setUp', 'setup', 'setUpClass', 'tearDown', 'tearDownClass']:
                             setup_methods.append(ast.unparse(node))
                 
-                logging.info(f"Found {len(test_methods)} test methods in {file}")
-                
                 # Create individual test files for each test method
                 for idx, test_method in enumerate(test_methods):
                     method_name = f"{class_name.split('.')[-1]}Test_{branch}_{prompt_key}_{j}_{i}_{counter}_{idx}"
                     output_file_path = os.path.join(output_path, f"{method_name}.py")
 
                     # Create pytest-style test file
-                    imports_str = "".join(imports) if imports else ""
+                    imports_str = "\n".join(imports) if imports else ""
                     test_template_header = test_template.split("#TEST_METHODS#")[0] if "#TEST_METHODS#" in test_template else test_template
                     
                     # Properly indent the test method (it's already properly formatted from ast.unparse)
                     indented_test_method = "\n".join(f"    {line}" if line.strip() else "" for line in test_method.split("\n"))
                     
-                    full_test_content = f"{test_template_header}{indented_test_method}\n"
+                    full_test_content = f"{imports_str}\n{test_template_header}{indented_test_method}\n"
                     
                     # Add setup methods if they exist
                     if setup_methods:
@@ -503,7 +500,7 @@ class PythonTestSuiteGenerator(TestSuiteGenerator):
 
         # Fetch the source code paths for each class and save the associated scenario information and import data
         for class_name, methods in targets.items():
-            source_code_path, branch, source_paths = self.fetch_source_code_branch(input_file, class_name, project_name)
+            source_code_path, branch, _ = self.fetch_source_code_branch(input_file, class_name, project_name)
             self.save_scenario_infos(scenario_infos_path, class_name, methods, source_code_path)
             self.save_imports(class_name, source_code_path, imports_path)
             # Copy ALL branch files to test directory for dynamic switching during execution

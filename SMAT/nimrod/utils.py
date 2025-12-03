@@ -2,11 +2,6 @@ import os
 import json
 
 
-def get_python_files(path):
-    """Get all Python files in a directory."""
-    return get_files(path, ext='.py')
-
-
 def get_files(path, root='', ext=None):
     """Get all files with specified extension in a directory."""
     files = []

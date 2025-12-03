@@ -67,9 +67,7 @@ class SemanticConflictsOutputGenerator(OutputGenerator[List[SemanticConflictsOut
         exercised_targets: Dict[str, List[str]] = dict()
 
         try:
-            logging.debug(f"Looking for coverage report in: {coverage_report_root}")
             coverage_json_path = path.join(coverage_report_root, 'coverage.json')
-            logging.debug(f"Coverage JSON path: {coverage_json_path}")
             
             if not path.exists(coverage_json_path):
                 logging.warning(f"Coverage JSON report not found at {coverage_json_path}")
