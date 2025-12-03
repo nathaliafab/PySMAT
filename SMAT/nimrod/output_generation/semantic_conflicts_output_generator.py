@@ -2,8 +2,8 @@ from typing import Dict, List, TypedDict, Union
 from nimrod.output_generation.output_generator import OutputGenerator, OutputGeneratorContext
 from nimrod.test_suites_execution.main import TestSuitesExecution
 from os import path
+from nimrod.utils import load_json
 import logging
-import json
 
 
 class SemanticConflictsOutput(TypedDict):
@@ -25,25 +25,46 @@ class SemanticConflictsOutputGenerator(OutputGenerator[List[SemanticConflictsOut
     def _generate_report_data(self, context: OutputGeneratorContext) -> List[SemanticConflictsOutput]:
         report_data: List[SemanticConflictsOutput] = list()
 
+        # Group conflicts by test suite to run coverage once per suite
+        conflicts_by_suite = {}
         for semantic_conflict in context.semantic_conflicts:
-            # We need to detect which targets from the input were exercised in this conflict.
-            exercised_targets: Dict[str, List[str]] = dict()
+            suite_path = semantic_conflict.detected_in.test_suite.path
+            if suite_path not in conflicts_by_suite:
+                conflicts_by_suite[suite_path] = {
+                    'test_suite': semantic_conflict.detected_in.test_suite,
+                    'conflicts': []
+                }
+            conflicts_by_suite[suite_path]['conflicts'].append(semantic_conflict)
+
+        # Execute coverage once per suite with all conflicted tests
+        coverage_reports_by_suite = {}
+        for suite_path, suite_data in conflicts_by_suite.items():
             try:
+                test_cases = [conflict.detected_in.name for conflict in suite_data['conflicts']]
                 coverage_report_root = self._test_suites_execution.execute_test_suite_with_coverage(
-                    test_suite=semantic_conflict.detected_in.test_suite,
+                    test_suite=suite_data['test_suite'],
                     target_file=context.scenario.scenario_files.merge,
-                    test_cases=[semantic_conflict.detected_in.name]
+                    test_cases=test_cases
                 )
-
-                exercised_targets = self._extract_exercised_targets_from_coverage_report(
-                    coverage_report_root=coverage_report_root,
-                    targets=context.scenario.targets
-                )
-
+                coverage_reports_by_suite[suite_path] = coverage_report_root
             except Exception as e:
-                # If we cannot execute the test suite with coverage, we log the error and continue.
-                logging.error(f"Error executing test suite with coverage for semantic conflict: {e}")
-                exercised_targets = {}
+                logging.error(f"Error executing test suite with coverage for suite {suite_path}: {e}")
+                coverage_reports_by_suite[suite_path] = None
+
+        # Generate report data for each conflict using the shared coverage report
+        for semantic_conflict in context.semantic_conflicts:
+            suite_path = semantic_conflict.detected_in.test_suite.path
+            exercised_targets: Dict[str, List[str]] = dict()
+            
+            if coverage_reports_by_suite.get(suite_path):
+                try:
+                    exercised_targets = self._extract_exercised_targets_from_coverage_report(
+                        coverage_report_root=coverage_reports_by_suite[suite_path],
+                        targets=context.scenario.targets
+                    )
+                except Exception as e:
+                    logging.error(f"Error extracting exercised targets for {semantic_conflict.detected_in.name}: {e}")
+                    exercised_targets = {}
 
             report_data.append({
                 "project_name": context.scenario.project_name,
@@ -73,8 +94,7 @@ class SemanticConflictsOutputGenerator(OutputGenerator[List[SemanticConflictsOut
                 logging.warning(f"Coverage JSON report not found at {coverage_json_path}")
                 return exercised_targets
 
-            with open(coverage_json_path, 'r', encoding='utf-8') as f:
-                unified_report = json.load(f)
+            unified_report = load_json(coverage_json_path)
 
             # Extract exercised targets from unified coverage report
             conflicted_tests_coverage = unified_report.get('conflicted_tests_coverage', [])
