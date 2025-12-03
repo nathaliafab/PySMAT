@@ -1,257 +1,305 @@
 import os
 import subprocess
-import tempfile
 import json
-from pathlib import Path
+import glob
+from datetime import datetime
 import logging
 
 
 class PythonCoverage:
     """
-    Python coverage analysis class - equivalent to Jacoco for Java.
-    Uses the coverage.py library to measure code coverage.
+    Python coverage analysis.
     """
     
     def __init__(self, python_executor):
         self.python = python_executor
 
     def install_coverage(self):
-        """Install coverage.py if not available."""
+        """Install pytest-cov if not available."""
         try:
-            import coverage
+            import pytest_cov
             return True
         except ImportError:
             try:
                 subprocess.check_call([
-                    self.python.python_executable, '-m', 'pip', 'install', 'coverage'
+                    self.python.python_executable, '-m', 'pip', 'install', 'pytest-cov'
                 ])
                 return True
             except subprocess.CalledProcessError as e:
-                logging.error(f"Failed to install coverage: {e}")
+                logging.error(f"Failed to install pytest-cov: {e}")
                 return False
 
-    def run_with_coverage(self, python_file, test_code, source_files=None):
+    def run_coverage_for_conflicted_tests(self, test_suite_path, merge_file, conflicted_test_names):
         """
-        Run Python code with coverage measurement.
+        Run coverage only for conflicted tests on merge version.
         
         Args:
-            python_file: The main Python file to analyze
-            test_code: The test code to execute
-            source_files: List of source files to include in coverage
-        
+            test_suite_path: Path to test suite directory
+            merge_file: Merge version Python file 
+            conflicted_test_names: List of test case names that detected conflicts
+            
         Returns:
-            Coverage data and results
+            Unified coverage report for conflicted tests
         """
         if not self.install_coverage():
-            raise RuntimeError("Could not install coverage.py")
+            raise RuntimeError("Could not install pytest-cov")
         
-        # Create temporary files for the test
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_file = os.path.join(temp_dir, 'test_runner.py')
-            coverage_file = os.path.join(temp_dir, '.coverage')
-            
-            # Write the test code to a file
-            with open(test_file, 'w', encoding='utf-8') as f:
-                f.write(test_code)
-            
-            # Prepare coverage command
-            coverage_cmd = [
-                self.python.python_executable, '-m', 'coverage', 'run',
-                '--data-file', coverage_file
-            ]
-            
-            if source_files:
-                for source in source_files:
-                    coverage_cmd.extend(['--source', source])
-            else:
-                # Include the directory of the python_file
-                source_dir = os.path.dirname(os.path.abspath(python_file))
-                coverage_cmd.extend(['--source', source_dir])
-            
-            coverage_cmd.append(test_file)
-            
-            try:
-                # Run the test with coverage
-                result = subprocess.run(
-                    coverage_cmd,
-                    cwd=temp_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=300
-                )
-                
-                if result.returncode != 0:
-                    logging.warning(f"Test execution returned non-zero: {result.stderr}")
-                
-                # Generate coverage report
-                coverage_data = self._generate_coverage_report(coverage_file, temp_dir)
-                
-                return {
-                    'stdout': result.stdout,
-                    'stderr': result.stderr,
-                    'returncode': result.returncode,
-                    'coverage': coverage_data
-                }
-                
-            except subprocess.TimeoutExpired:
-                logging.error("Coverage execution timed out")
-                raise
-            except Exception as e:
-                logging.error(f"Error running coverage: {e}")
-                raise
-
-    def _generate_coverage_report(self, coverage_file, temp_dir):
-        """Generate coverage report in JSON format."""
+        if not conflicted_test_names:
+            logging.warning("No conflicted tests provided")
+            return {}
+        
+        # Extract class name from merge file or test files
+        class_name = self._extract_class_name(merge_file, test_suite_path)
+        logging.info(f"Running coverage for class: {class_name}")
+        
+        # Setup files
+        main_file = os.path.join(test_suite_path, f"{class_name}.py")
+        backup_file = os.path.join(test_suite_path, f"{class_name}_backup.py")
+        
+        # Create output directory
+        output_dir = self._create_output_directory(test_suite_path, merge_file)
+        
         try:
-            # Generate JSON report
-            json_report_cmd = [
-                self.python.python_executable, '-m', 'coverage', 'json',
-                '--data-file', coverage_file,
-                '-o', os.path.join(temp_dir, 'coverage.json')
+            # Backup and copy merge file
+            self._setup_merge_file(merge_file, main_file, backup_file)
+            
+            # Map conflicted tests to actual test files
+            test_file_mapping = self._map_conflicted_tests_to_files(
+                conflicted_test_names, test_suite_path, class_name
+            )
+            
+            # Run coverage for each conflicted test
+            coverage_results = self._run_individual_coverage(
+                test_file_mapping, test_suite_path, class_name, output_dir
+            )
+            
+            # Create unified report
+            unified_report = self._create_unified_report(
+                conflicted_test_names, coverage_results, output_dir
+            )
+            
+            return unified_report
+            
+        finally:
+            self._restore_original_file(main_file, backup_file)
+    def _extract_class_name(self, target_file, test_suite_path):
+        """Extract class name from target file or test files."""
+        target_name = os.path.splitext(os.path.basename(target_file))[0]
+        
+        if '_' in target_name:
+            class_name = target_name.split('_')[0]
+        elif target_name in ['base', 'left', 'right', 'merge']:
+            # Find class name from test files
+            test_files = glob.glob(os.path.join(test_suite_path, "*Test_*.py"))
+            if test_files:
+                first_test = os.path.basename(test_files[0])
+                if 'Test_' in first_test:
+                    class_name = first_test.split('Test_')[0]
+                else:
+                    # Extract from any .py file that's not a test file
+                    py_files = glob.glob(os.path.join(test_suite_path, "*.py"))
+                    for py_file in py_files:
+                        base_name = os.path.splitext(os.path.basename(py_file))[0]
+                        if not base_name.endswith('Test') and not base_name.startswith('test'):
+                            class_name = base_name
+                            break
+                    else:
+                        raise ValueError("Could not determine class name from test suite directory")
+            else:
+                # Look for any non-test Python file
+                py_files = glob.glob(os.path.join(test_suite_path, "*.py"))
+                for py_file in py_files:
+                    base_name = os.path.splitext(os.path.basename(py_file))[0]
+                    if not base_name.endswith('Test') and not base_name.startswith('test'):
+                        class_name = base_name
+                        break
+                else:
+                    raise ValueError("Could not determine class name from test suite directory")
+        else:
+            class_name = target_name
+        
+        return class_name
+
+    def _create_output_directory(self, test_suite_path, merge_file):
+        """Create output directory for coverage reports."""
+        reports_base_dir = os.path.join(os.path.dirname(test_suite_path), '..', '..', 'reports')
+        os.makedirs(reports_base_dir, exist_ok=True)
+        
+        suite_name = os.path.basename(test_suite_path)
+        merge_name = os.path.splitext(os.path.basename(merge_file))[0]
+        output_dir = os.path.join(reports_base_dir, f'{suite_name}_{merge_name}_conflicts_coverage')
+        os.makedirs(output_dir, exist_ok=True)
+        
+        return output_dir
+
+    def _setup_merge_file(self, merge_file, main_file, backup_file):
+        """Backup original and copy merge file."""
+        if os.path.exists(main_file):
+            import shutil
+            shutil.copy2(main_file, backup_file)
+        
+        if os.path.exists(merge_file):
+            import shutil
+            shutil.copy2(merge_file, main_file)
+            logging.debug(f"Copied {merge_file} to {main_file}")
+
+    def _map_conflicted_tests_to_files(self, conflicted_tests, test_suite_path, class_name):
+        """Map conflicted test names to actual test files."""
+        all_test_files = glob.glob(os.path.join(test_suite_path, f"{class_name}Test_*.py"))
+        test_file_mapping = {}
+        
+        logging.info(f"Found {len(all_test_files)} test files in {test_suite_path}")
+        logging.info(f"Test files: {[os.path.basename(f) for f in all_test_files]}")
+        logging.info(f"Conflicted tests to map: {conflicted_tests}")
+        
+        for conflicted_test in conflicted_tests:
+            test_class_part = conflicted_test.split('#')[0] if '#' in conflicted_test else conflicted_test
+            logging.info(f"Looking for test class: {test_class_part}")
+            
+            for test_file in all_test_files:
+                test_basename = os.path.basename(test_file)
+                if test_class_part in test_basename:
+                    test_file_mapping[conflicted_test] = test_basename
+                    logging.info(f"Mapped '{conflicted_test}' -> '{test_basename}'")
+                    break
+            else:
+                logging.warning(f"Could not find test file for: {conflicted_test}")
+        
+        logging.info(f"Final mapping: {test_file_mapping}")
+        return test_file_mapping
+
+    def _run_individual_coverage(self, test_file_mapping, test_suite_path, class_name, output_dir):
+        """Run coverage for each conflicted test individually."""
+        coverage_results = {}
+        env = os.environ.copy()
+        env['PYTHONPATH'] = test_suite_path
+        
+        for test_case, test_file in test_file_mapping.items():
+            logging.info(f"Running coverage for: {test_case}")
+            
+            # Create coverage output files
+            coverage_json = os.path.join(output_dir, f'coverage_{test_file}.json')
+            
+            # Run pytest with coverage
+            pytest_cmd = [
+                self.python.python_executable, '-m', 'pytest',
+                '--cov-report=json:' + coverage_json,
+                '--cov', class_name,
+                '--cov-branch',
+                test_file,
+                '-v'
             ]
             
-            subprocess.run(json_report_cmd, check=True, cwd=temp_dir)
+            result = subprocess.run(
+                pytest_cmd,
+                cwd=test_suite_path,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
             
-            # Read the JSON report
-            json_file = os.path.join(temp_dir, 'coverage.json')
-            if os.path.exists(json_file):
-                with open(json_file, 'r', encoding='utf-8') as f:
+            # Load and store coverage data
+            coverage_data = self._load_coverage_json(coverage_json)
+            coverage_results[test_case] = {
+                'test_file': test_file,
+                'coverage_data': coverage_data,
+                'success': result.returncode == 0,
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            }
+            
+            status = "Success" if result.returncode == 0 else "Failed"
+            logging.info(f"Coverage for {test_case}: {status}")
+        
+        return coverage_results
+
+    def _create_unified_report(self, conflicted_tests, coverage_results, output_dir):
+        """Create unified report combining conflict detection with coverage data."""
+        unified_report = {
+            'summary': {
+                'total_conflicted_tests': len(conflicted_tests),
+                'tests_with_coverage': len(coverage_results),
+                'timestamp': datetime.now().isoformat()
+            },
+            'conflicted_tests_coverage': []
+        }
+        
+        for test_name in conflicted_tests:
+            test_entry = {
+                'test_case_name': test_name,
+                'conflict_detected': True,
+                'coverage_data': None
+            }
+            
+            if test_name in coverage_results:
+                coverage_data = coverage_results[test_name]['coverage_data']
+                files = coverage_data.get('files', {})
+                for file_path, file_data in files.items():
+                    if file_path.endswith('.py'):
+                        summary_data = file_data.get('summary', {})
+                        
+                        # Calculate line coverage
+                        executed_lines = file_data.get('executed_lines', [])
+                        missing_lines = file_data.get('missing_lines', [])
+                        total_statements = summary_data.get('num_statements', 0)
+                        covered_statements = summary_data.get('covered_lines', 0)
+                        line_coverage_percent = summary_data.get('percent_statements_covered', 0)
+                        
+                        # Calculate branch coverage
+                        total_branches = summary_data.get('num_branches', 0)
+                        covered_branches = summary_data.get('covered_branches', 0)
+                        branch_coverage_percent = summary_data.get('percent_branches_covered', 0)
+                        
+                        test_entry['coverage_data'] = {
+                            'line_coverage': {
+                                'percent': line_coverage_percent,
+                                'covered_statements': covered_statements,
+                                'total_statements': total_statements,
+                                'executed_lines': executed_lines,
+                                'missing_lines': missing_lines
+                            },
+                            'branch_coverage': {
+                                'percent': branch_coverage_percent,
+                                'covered_branches': covered_branches,
+                                'total_branches': total_branches,
+                                'executed_branches': file_data.get('executed_branches', []),
+                                'missing_branches': file_data.get('missing_branches', [])
+                            },
+                            'overall_coverage_percent': summary_data.get('percent_covered', 0)
+                        }
+                        break
+            
+            unified_report['conflicted_tests_coverage'].append(test_entry)
+        
+        # Save unified report
+        unified_file = os.path.join(output_dir, 'unified_conflicts_coverage.json')
+        with open(unified_file, 'w') as f:
+            json.dump(unified_report, f, indent=2)
+        
+        logging.info(f"Created unified conflicts+coverage report: {unified_file}")
+        return unified_report
+
+    def _restore_original_file(self, main_file, backup_file):
+        """Restore original file from backup."""
+        if os.path.exists(backup_file):
+            import shutil
+            shutil.copy2(backup_file, main_file)
+            os.remove(backup_file)
+            logging.debug(f"Restored original file: {main_file}")
+
+    def _load_coverage_json(self, coverage_json_file):
+        """Load coverage data from pytest-cov JSON report."""
+        try:
+            if os.path.exists(coverage_json_file):
+                with open(coverage_json_file, 'r', encoding='utf-8') as f:
                     coverage_data = json.load(f)
                 return coverage_data
             else:
+                logging.warning(f"Coverage JSON file not found: {coverage_json_file}")
                 return {}
                 
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Failed to generate coverage report: {e}")
+        except Exception as e:
+            logging.error(f"Failed to load coverage JSON report: {e}")
             return {}
 
-    def analyze_behavioral_differences(self, base_file, left_file, right_file, merge_file, test_inputs):
-        """
-        Analyze behavioral differences between different versions of Python files.
-        
-        Args:
-            base_file: Base version Python file
-            left_file: Left branch Python file  
-            right_file: Right branch Python file
-            merge_file: Merged version Python file
-            test_inputs: List of test inputs to execute
-            
-        Returns:
-            Dictionary with behavioral analysis results
-        """
-        results = {}
-        
-        for version_name, file_path in [
-            ('base', base_file), ('left', left_file), 
-            ('right', right_file), ('merge', merge_file)
-        ]:
-            version_results = []
-            
-            for test_input in test_inputs:
-                try:
-                    # Create test code for this input
-                    test_code = self._create_test_code(file_path, test_input)
-                    
-                    # Run with coverage
-                    coverage_result = self.run_with_coverage(file_path, test_code, [file_path])
-                    
-                    version_results.append({
-                        'input': test_input,
-                        'output': coverage_result.get('stdout', ''),
-                        'error': coverage_result.get('stderr', ''),
-                        'coverage': coverage_result.get('coverage', {}),
-                        'success': coverage_result.get('returncode', 1) == 0
-                    })
-                    
-                except Exception as e:
-                    logging.error(f"Error testing {version_name} with input {test_input}: {e}")
-                    version_results.append({
-                        'input': test_input,
-                        'output': '',
-                        'error': str(e),
-                        'coverage': {},
-                        'success': False
-                    })
-            
-            results[version_name] = version_results
-        
-        return results
-
-    def _create_test_code(self, python_file, test_input):
-        """Create test code for a specific input."""
-        # Import the module and extract the main class/function
-        module_name = Path(python_file).stem
-        
-        test_code = f"""
-import sys
-import os
-sys.path.insert(0, os.path.dirname('{python_file}'))
-
-from {module_name} import *
-
-# Test execution
-try:
-    # Assuming DiscountCalculator class based on the example
-    calculator = DiscountCalculator()
-    result = calculator.apply({test_input})
-    print(f"Input: {test_input}, Output: {{result}}")
-except Exception as e:
-    print(f"Error with input {test_input}: {{e}}")
-"""
-        return test_code
-
-    def compare_behaviors(self, results_dict):
-        """
-        Compare behaviors between different versions.
-        
-        Args:
-            results_dict: Dictionary with results from analyze_behavioral_differences
-            
-        Returns:
-            Dictionary with comparison results and detected conflicts
-        """
-        conflicts = []
-        base_results = results_dict.get('base', [])
-        left_results = results_dict.get('left', [])
-        right_results = results_dict.get('right', [])
-        merge_results = results_dict.get('merge', [])
-        
-        # Compare outputs for each test input
-        for i in range(len(base_results)):
-            if i < len(left_results) and i < len(right_results) and i < len(merge_results):
-                base_output = base_results[i]['output']
-                left_output = left_results[i]['output']
-                right_output = right_results[i]['output']
-                merge_output = merge_results[i]['output']
-                
-                test_input = base_results[i]['input']
-                
-                # Check for semantic conflicts
-                if (left_output != base_output and right_output != base_output):
-                    # Both branches changed behavior
-                    if merge_output != left_output and merge_output != right_output:
-                        conflicts.append({
-                            'type': 'semantic_conflict',
-                            'input': test_input,
-                            'base_output': base_output,
-                            'left_output': left_output,
-                            'right_output': right_output,
-                            'merge_output': merge_output,
-                            'description': 'Merge result differs from both branches'
-                        })
-                    elif left_output != right_output and merge_output == base_output:
-                        conflicts.append({
-                            'type': 'potential_conflict',
-                            'input': test_input,
-                            'base_output': base_output,
-                            'left_output': left_output,
-                            'right_output': right_output,
-                            'merge_output': merge_output,
-                            'description': 'Both branches changed but merge reverted to base'
-                        })
-        
-        return {
-            'conflicts': conflicts,
-            'total_tests': len(base_results),
-            'conflict_count': len(conflicts)
-        }
