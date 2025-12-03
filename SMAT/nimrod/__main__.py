@@ -15,7 +15,6 @@ from nimrod.tests.utils import setup_logging, get_config
 from nimrod.test_suite_generation.generators.llm_test_suite_generator import PythonTestSuiteGenerator
 from nimrod.test_suites_execution.main import TestSuitesExecution
 from nimrod.test_suites_execution.python_test_suite_executor import PythonTestSuiteExecutor
-# All Java-specific imports removed
 from nimrod.tools.python import Python
 from nimrod.tools.python_coverage import PythonCoverage
 from nimrod.input_parsing.input_parser import JsonInputParser

@@ -8,7 +8,7 @@ TIMEOUT = 10 * 60
 
 class Python:
     """
-    Python execution and management class for handling Python files instead of Java.
+    Python execution and management class for handling Python files.
     """
 
     def __init__(self, python_executable=None):
