@@ -2,3 +2,4 @@ types-requests
 google-genai
 pytest
 pytest-cov
+pynguin
