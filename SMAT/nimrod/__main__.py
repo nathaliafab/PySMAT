@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List
+from typing import Dict, List, Union
 from nimrod.dynamic_analysis.behavior_change_checker import BehaviorChangeChecker
 from nimrod.dynamic_analysis.criteria.first_semantic_conflict_criteria import FirstSemanticConflictCriteria
 from nimrod.dynamic_analysis.criteria.second_semantic_conflict_criteria import SecondSemanticConflictCriteria
@@ -13,6 +13,8 @@ from nimrod.smat import SMAT
 from nimrod.test_suite_generation.main import TestSuiteGeneration
 from nimrod.tests.utils import setup_logging, get_config
 from nimrod.test_suite_generation.generators.llm_test_suite_generator import PythonTestSuiteGenerator
+from nimrod.test_suite_generation.generators.pynguin_test_suite_generator import PynguinTestSuiteGenerator
+from nimrod.test_suite_generation.generators.test_suite_generator import TestSuiteGenerator
 from nimrod.test_suites_execution.main import TestSuitesExecution
 from nimrod.test_suites_execution.python_test_suite_executor import PythonTestSuiteExecutor
 from nimrod.tools.python import Python
@@ -36,10 +38,10 @@ def get_llm_test_suite_generators(config: Dict[str, str]) -> List[PythonTestSuit
   return generators
 
 
-def get_test_suite_generators(config: Dict[str, str]) -> List[PythonTestSuiteGenerator]:
+def get_test_suite_generators(config: Dict[str, str]) -> List[Union[PythonTestSuiteGenerator, TestSuiteGenerator]]:
   config_generators = config.get(
       'test_suite_generators', ['llm', 'project'])
-  generators: List[PythonTestSuiteGenerator] = list()
+  generators: List[Union[PythonTestSuiteGenerator, TestSuiteGenerator]] = list()
 
   # Python-only generators
   if 'llm' in config_generators:
@@ -48,6 +50,14 @@ def get_test_suite_generators(config: Dict[str, str]) -> List[PythonTestSuiteGen
   if 'project' in config_generators:
     # Use Python test suite generator for project tests
     generators.append(PythonTestSuiteGenerator(Python()))
+  if 'pynguin' in config_generators:
+    # Use Pynguin test suite generator
+    search_time = config.get('test_suite_generation_search_time_available', 45)
+    try:
+      search_time = int(search_time)
+    except (ValueError, TypeError):
+      search_time = 45
+    generators.append(PynguinTestSuiteGenerator(Python(), search_time))
 
   return generators
 

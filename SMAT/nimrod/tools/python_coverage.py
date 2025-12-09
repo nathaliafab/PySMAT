@@ -148,7 +148,16 @@ class PythonCoverage:
 
     def _map_conflicted_tests_to_files(self, conflicted_tests, test_suite_path, class_name):
         """Map conflicted test names to actual test files."""
+        # First try LLM pattern: {class_name}Test_*.py
         all_test_files = glob.glob(os.path.join(test_suite_path, f"{class_name}Test_*.py"))
+        
+        # If no files found, try Pynguin pattern: test_*.py
+        if not all_test_files:
+            all_test_files = glob.glob(os.path.join(test_suite_path, "test_*.py"))
+            logging.debug(f"Using Pynguin test pattern, found {len(all_test_files)} test files")
+        else:
+            logging.debug(f"Using LLM test pattern, found {len(all_test_files)} test files")
+        
         test_file_mapping = {}
         
         for conflicted_test in conflicted_tests:
@@ -161,7 +170,12 @@ class PythonCoverage:
                     test_file_mapping[conflicted_test] = test_basename
                     break
             else:
-                logging.warning(f"Could not find test file for: {conflicted_test}")
+                # For Pynguin tests, if no exact match, map to the first available test file
+                if all_test_files and any(f.startswith('test_') for f in [os.path.basename(f) for f in all_test_files]):
+                    test_file_mapping[conflicted_test] = os.path.basename(all_test_files[0])
+                    logging.debug(f"Mapped {conflicted_test} to first available Pynguin test file: {os.path.basename(all_test_files[0])}")
+                else:
+                    logging.warning(f"Could not find test file for: {conflicted_test}")
         return test_file_mapping
 
     def _run_individual_coverage(self, test_file_mapping, test_suite_path, class_name, output_dir):

@@ -7,10 +7,18 @@
   "path_output_csv": "",
   "logger_level": "DEBUG",
   "test_suite_generators": [
-    "llm"
+    "llm",
+    "pynguin"
   ],
   "test_suite_generation_search_time_available": "45",
   "prompt_template": "zero_shot",
+  "pynguin_config": {
+    "danger_aware": true,
+    "algorithm": "WHOLE_SUITE",
+    "population_size": 50,
+    "elite_size": 5,
+    "crossover_rate": 0.75
+  },
   "api_params": {
     "gemini": {
       "model": "gemini-2.5-flash",
