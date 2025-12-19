@@ -72,7 +72,7 @@ $env:USER_ID=1000; $env:GROUP_ID=1000; docker compose run --rm --build pysmat
 
 ## 4. Uso Dentro do Container
 
-Uma vez que o comando termine, você estará dentro do shell Ubuntu em `/app`. Você pode executar testes ou iniciar uma análise:
+Uma vez que o comando termine, você estará dentro do shell em `/app`. Você pode executar testes ou iniciar uma análise:
 
 ```bash
 # Verifique se o volume está montado corretamente
