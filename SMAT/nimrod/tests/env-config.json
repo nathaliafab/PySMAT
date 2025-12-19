@@ -2,7 +2,7 @@
   "python_executable": "python3",
   "repo_dir": "",
   "projects_folder": "",
-  "input_path": "/path/input-smat.json",
+  "input_path": "/app/input-smat.json",
   "tests_dst": "",
   "path_output_csv": "",
   "logger_level": "DEBUG",

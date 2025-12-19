@@ -1,0 +1,15 @@
+services:
+  pysmat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        USER_ID: ${USER_ID}
+        GROUP_ID: ${GROUP_ID}
+    image: pysmat-ubuntu
+    container_name: pysmat_container
+    volumes:
+      # Mount the current directory to /app in the container
+      - .:/app
+    stdin_open: true
+    tty: true

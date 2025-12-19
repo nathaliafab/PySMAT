@@ -18,10 +18,10 @@
       ]
     },
     "scenarioFiles": {
-      "base": "/path/python_files/base.py",
-      "left": "/path/python_files/left.py",
-      "right": "/path/python_files/right.py",
-      "merge": "/path/python_files/merge.py"
+      "base": "/app/python_files/base.py",
+      "left": "/app/python_files/left.py",
+      "right": "/app/python_files/right.py",
+      "merge": "/app/python_files/merge.py"
     }
   }
 ]
